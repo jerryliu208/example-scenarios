@@ -2,10 +2,12 @@ package com.vincent.example;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 
+@Slf4j
 public class SellService {
     private final String logText;
     private final String serviceName;
@@ -27,7 +29,7 @@ public class SellService {
     public void execute() {
         try {
             // print thread name
-            System.out.println(this.serviceName + " started");
+            log.info(this.serviceName + " started");
 
             // acquire lock
             RLock lock = this.redisson.getLock("test");
@@ -40,7 +42,7 @@ public class SellService {
                 locked = lock.tryLock(this.lockExpireTime, this.lockExpireTime, TimeUnit.SECONDS);
             }
             if (!locked) {
-                System.out.println(logText + "Failed to acquire lock");
+                log.info(logText + "Failed to acquire lock");
                 return;
             }
 
@@ -50,7 +52,7 @@ public class SellService {
                 String stockKey = "stock";
                 RBucket<Integer> stockRBucket = this.redisson.getBucket(stockKey);
                 Integer stock = stockRBucket.get();
-                System.out.println(logText + stockKey + " = " + stock);
+                log.info(logText + stockKey + " = " + stock);
 
                 // lock expire countdown
                 if (this.withWatchDog == Boolean.FALSE
@@ -58,7 +60,7 @@ public class SellService {
                     CompletableFuture.runAsync(() -> {
                         try {
                             Thread.sleep(this.lockExpireTime * 1000);
-                            System.out.println(logText + "lock is expired");
+                            log.warn(logText + "lock is expired");
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
@@ -67,25 +69,25 @@ public class SellService {
 
                 // mock GC stop the world
                 if (this.mockGcSleepTime > 0) {
-                    System.out.println(
+                    log.warn(
                             logText + "mock GC stop the world for " + this.mockGcSleepTime
                                     + " seconds");
                     Thread.sleep(this.mockGcSleepTime * 1000);
-                    System.out.println(logText + "continue");
+                    log.info(logText + "continue");
                 }
 
                 // sell stock
                 stock--;
                 stockRBucket.set(stock);
-                System.out.println(logText + stockKey + " set to " + stock);
+                log.info(logText + stockKey + " set to " + stock);
             } catch (Exception e) {
               e.printStackTrace();
             } finally {
                 try {
                     lock.unlock();
-                    System.out.println(logText + "unlock success");
+                    log.info(logText + "unlock success");
                 } catch (Exception e) {
-                    System.out.println(logText + "Failed to unlock");
+                    log.error(logText + "Failed to unlock");
                 }
             }
         } catch (InterruptedException e) {
